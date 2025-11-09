@@ -1,0 +1,565 @@
+"""
+Data generator for Vietravel Business Intelligence Dashboard
+Generates realistic mock data for tour sales, customers, and operations
+"""
+
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+from faker import Faker
+import random
+import pytz # Thêm pytz
+
+# Initialize Faker with Vietnamese locale
+fake = Faker(['vi_VN'])
+
+class VietravelDataGenerator:
+    """Generates realistic mock data for Vietravel tour business"""
+    
+    def __init__(self, seed=42):
+        """Initialize the data generator with a seed for reproducibility"""
+        random.seed(seed)
+        np.random.seed(seed)
+        Faker.seed(seed)
+        
+        # Define tour routes (tuyến tour)
+        self.tour_routes = [
+            "DH & ĐBSH", "Nam Trung Bộ", "Bắc Trung Bộ", "Liên Tuyến miền Tây", 
+            "Phú Quốc", "Thái Lan", "Trung Quốc", "Hàn Quốc", "Singapore - Malaysia",
+            "Nhật Bản", "Châu Âu", "Châu Mỹ", "Châu Úc", "Châu Phi", "Tây Bắc",
+            "Đông Bắc", "Tây Nguyên"
+        ]
+        
+        # Business units (đơn vị kinh doanh)
+        self.business_units = [
+            "Miền Trung", "Miền Tây", "Miền Bắc", "Trụ sở & ĐNB"
+        ]
+        
+        # Sales channels (kênh bán)
+        self.sales_channels = [
+            "Online", "Trực tiếp VPGD", "Đại lý"
+        ]
+        
+        # Segments (phân khúc)
+        self.segments = [
+            "FIT", "GIT", "Inbound"
+        ]
+        
+        # Map routes to business units (SỬA LỖI: Dùng danh sách các cặp hợp lệ)
+        self.route_unit_pairs = [
+            ("DH & ĐBSH", "Miền Bắc"), ("DH & ĐBSH", "Trụ sở & ĐNB"), # Cho phép DH & ĐBSH bán ở cả 2 nơi
+            ("Tây Nguyên", "Miền Tây"),
+            ("Bắc Trung Bộ", "Miền Trung"),
+            ("Phú Quốc", "Miền Tây"),
+            ("Liên Tuyến miền Tây", "Miền Tây"),
+            ("Nam Trung Bộ", "Miền Trung"),
+            ("Đông Bắc", "Miền Bắc"),
+            ("Tây Bắc", "Miền Bắc"),
+            
+            # Tuyến Quốc tế (Phân bổ)
+            ("Singapore - Malaysia", "Trụ sở & ĐNB"),
+            ("Hàn Quốc", "Trụ sở & ĐNB"),
+            ("Nhật Bản", "Trụ sở & ĐNB"),
+            ("Trung Quốc", "Trụ sở & ĐNB"),
+            ("Thái Lan", "Trụ sở & ĐNB"),
+            
+            # CHÂU ÂU: Phân bổ cho cả Miền Bắc và Trụ sở & ĐNB (ĐÃ SỬA LỖI)
+            ("Châu Âu", "Trụ sở & ĐNB"),
+            ("Châu Âu", "Miền Bắc"),
+            
+            ("Châu Mỹ", "Trụ sở & ĐNB"),
+            ("Châu Úc", "Trụ sở & ĐNB"),
+            ("Châu Phi", "Trụ sở & ĐNB")
+        ]
+        
+        # LƯU Ý: Không sử dụng self.route_to_unit dictionary 1:1 nữa.
+        
+        # Safety margin thresholds by route
+        self.safety_margins = {
+            route: random.uniform(4, 7) for route in self.tour_routes
+        }
+        
+        # Partner Data
+        self.partners = [
+            ("Khách sạn A", "Khách sạn"), ("Khách sạn B", "Khách sạn"), ("Khách sạn C", "Khách sạn"),
+            ("Hàng không X", "Vé máy bay"), ("Hàng không Y", "Vé máy bay"), 
+            ("Vận chuyển 1", "Vận chuyển"), ("Vận chuyển 2", "Vận chuyển"),
+            ("Nhà hàng A", "Ăn uống"), ("Nhà hàng B", "Ăn uống"),
+            ("Điểm tham quan 1", "Điểm tham quan"), ("Đại lý Quốc tế 1", "Đối tác nước ngoài")
+        ]
+
+        self.service_types = ["Lưu trú", "Vé máy bay", "Vận chuyển", "Ăn uống", "Tham quan"]
+    
+    def generate_tour_data(self, start_date, end_date, num_tours=1500):
+        """
+        Generate tour booking data
+        """
+        tours = []
+        
+        # Generate customer IDs to simulate returning customers
+        num_customers = int(num_tours * 0.7)
+        customer_ids = [f"KH{i:06d}" for i in range(1, num_customers + 1)]
+        
+        for i in range(num_tours):
+            # Random booking date
+            booking_date = fake.date_time_between(
+                start_date=start_date,
+                end_date=end_date
+            ).replace(tzinfo=None)
+            
+            # SỬA LỖI: Chọn một cặp (route, business_unit) ngẫu nhiên từ danh sách hợp lệ
+            route, business_unit = random.choice(self.route_unit_pairs)
+            
+            # Sales channel with realistic distribution
+            channel_weights = [0.35, 0.40, 0.25]
+            channel = random.choices(self.sales_channels, weights=channel_weights)[0]
+            
+            # Segment (phân khúc) based on route and group size
+            if route in ["Châu Âu", "Châu Mỹ", "Châu Úc", "Châu Phi", "Nhật Bản", "Hàn Quốc", 
+                         "Trung Quốc", "Thái Lan", "Singapore - Malaysia"]:
+                segment_weights = [0.25, 0.35, 0.40]
+            else:
+                segment_weights = [0.35, 0.55, 0.10]
+            segment = random.choices(self.segments, weights=segment_weights)[0]
+            
+            # Number of customers (group size)
+            if random.random() < 0.3:
+                num_customers_in_booking = random.randint(2, 4)
+            else:
+                num_customers_in_booking = random.randint(5, 20)
+            
+            tour_capacity = random.choice([20, 25, 30, 35, 40, 45])
+            
+            # Price per person (depends on route)
+            if route in ["Châu Âu", "Châu Mỹ"]:
+                price_per_person = random.randint(45000000, 75000000)
+            elif route in ["Châu Úc", "Châu Phi"]:
+                price_per_person = random.randint(35000000, 60000000)
+            elif route in ["Nhật Bản", "Hàn Quốc"]:
+                price_per_person = random.randint(15000000, 35000000)
+            elif route in ["Trung Quốc", "Thái Lan", "Singapore - Malaysia"]:
+                price_per_person = random.randint(8000000, 18000000)
+            else:
+                price_per_person = random.randint(3000000, 12000000)
+            
+            revenue = price_per_person * num_customers_in_booking
+            
+            cost_ratio = random.uniform(0.85, 0.95)
+            cost = revenue * cost_ratio
+            gross_profit = revenue - cost
+            gross_profit_margin = (gross_profit / revenue * 100) if revenue > 0 else 0
+            
+            status_weights = [0.75, 0.15, 0.10]
+            status = random.choices(["Đã xác nhận", "Đã hủy", "Hoãn"], weights=status_weights)[0]
+            
+            if random.random() < 0.25:
+                customer_id = random.choice(customer_ids[:int(len(customer_ids) * 0.3)])
+            else:
+                customer_id = random.choice(customer_ids)
+            
+            # Marketing and sales costs (OPEX)
+            if channel == "Online":
+                marketing_cost = revenue * random.uniform(0.02, 0.05)
+            else:
+                marketing_cost = revenue * random.uniform(0.01, 0.03)
+            
+            if channel == "Online":
+                sales_cost = revenue * random.uniform(0.01, 0.02)
+            elif channel == "Trực tiếp VPGD":
+                sales_cost = revenue * random.uniform(0.02, 0.04)
+            else:
+                sales_cost = revenue * random.uniform(0.05, 0.08)
+            
+            opex = marketing_cost + sales_cost
+            
+            # Partner and Service Data (cho Tab 3)
+            partner_name, partner_type = random.choice(self.partners)
+            service_type = partner_type
+            contract_status = random.choices(["Đang triển khai", "Sắp hết hạn", "Đã thanh lý"], weights=[0.8, 0.1, 0.1])[0]
+            payment_status = random.choices(["Trả trước", "Trả sau", "Chưa thanh toán"], weights=[0.6, 0.3, 0.1])[0]
+            feedback_ratio = random.uniform(0.7, 0.95)
+            service_cost = cost * random.uniform(0.8, 1.2)
+
+            age_group = random.choices(
+                ["18-25 (Gen Z)", "26-35 (Young Pro)", "36-55 (Mid-Career)", "56+ (Retiree)"],
+                weights=[0.25, 0.40, 0.30, 0.05]
+            )[0]
+            
+            if route in ["Châu Âu", "Châu Mỹ", "Châu Úc"]:
+                nationality = random.choices(["Việt Nam", "Mỹ", "Pháp", "Úc"], weights=[0.4, 0.3, 0.2, 0.1])[0]
+            else:
+                nationality = random.choices(["Việt Nam", "Hàn Quốc", "Trung Quốc"], weights=[0.8, 0.1, 0.1])[0]
+
+            tours.append({
+                'booking_id': f"BK{i+1:06d}",
+                'customer_id': customer_id, 'booking_date': booking_date, 'route': route, 
+                'business_unit': business_unit, 'sales_channel': channel, 'segment': segment, 
+                'num_customers': num_customers_in_booking, 'tour_capacity': tour_capacity, 
+                'price_per_person': price_per_person, 'revenue': revenue, 'cost': cost, 
+                'gross_profit': gross_profit, 'gross_profit_margin': gross_profit_margin, 
+                'status': status, 'marketing_cost': marketing_cost, 'sales_cost': sales_cost, 'opex': opex,
+                
+                # Trường Đối tác và Nhân khẩu học
+                'partner': partner_name, 'partner_type': partner_type, 'service_type': service_type,
+                'contract_status': contract_status, 'payment_status': payment_status, 'feedback_ratio': feedback_ratio,
+                'customer_age_group': age_group, 'customer_nationality': nationality, 'service_cost': service_cost
+            })
+        
+        return pd.DataFrame(tours)
+    
+    def generate_plan_data(self, year, month=None):
+        """
+        Generate monthly or yearly plan data
+        """
+        plans = []
+        
+        if month:
+            periods = [(year, month)]
+        else:
+            periods = [(year, m) for m in range(1, 13)]
+        
+        for year, month in periods:
+            for business_unit in self.business_units:
+                
+                # Lấy tất cả các tuyến tour mà đơn vị này có thể bán (SỬA LỖI LOGIC)
+                unit_routes = [r for r, u in self.route_unit_pairs if u == business_unit]
+                
+                for route in unit_routes:
+                    for segment in self.segments:
+                        # Seasonality factor
+                        if month in [1, 2, 4, 7, 8, 12]:
+                            seasonality = random.uniform(1.2, 1.5)
+                        elif month in [3, 9, 10]:
+                            seasonality = random.uniform(0.9, 1.1)
+                        else:
+                            seasonality = random.uniform(0.7, 0.9)
+                        
+                        # Base plan values (distributed by segment)
+                        base_customers = random.randint(5, 20)
+                        planned_customers = int(base_customers * seasonality)
+                        
+                        # Revenue plan
+                        if route in ["Châu Âu", "Châu Mỹ"]:
+                            avg_price = random.randint(30000000, 50000000)
+                        elif route in ["Châu Úc", "Châu Phi"]:
+                            avg_price = random.randint(25000000, 40000000)
+                        elif route in ["Nhật Bản", "Hàn Quốc"]:
+                            avg_price = random.randint(15000000, 25000000)
+                        elif route in ["Trung Quốc", "Thái Lan", "Singapore - Malaysia"]:
+                            avg_price = random.randint(8000000, 12000000)
+                        else:
+                            avg_price = random.randint(3000000, 7000000)
+                        
+                        planned_revenue = planned_customers * avg_price
+                        planned_gross_profit = planned_revenue * 0.20
+                        
+                        plans.append({
+                            'year': year, 'month': month, 'business_unit': business_unit, 
+                            'route': route, 'segment': segment, 'planned_customers': planned_customers, 
+                            'planned_revenue': planned_revenue, 'planned_gross_profit': planned_gross_profit
+                        })
+        
+        return pd.DataFrame(plans)
+    
+    def generate_historical_data(self, current_date, lookback_years=2):
+        """
+        Generate historical data for year-over-year comparison
+        """
+        all_data = []
+        
+        for year_offset in range(lookback_years + 1):
+            year_start = datetime(current_date.year - year_offset, 1, 1)
+            year_end = datetime(current_date.year - year_offset, 12, 31)
+            
+            # Generate tours for this year
+            num_tours = random.randint(400, 600)
+            yearly_data = self.generate_tour_data(year_start, year_end, num_tours)
+            all_data.append(yearly_data)
+        
+        return pd.concat(all_data, ignore_index=True)
+
+
+def load_or_generate_data(input_folder='input_excels'):
+    """
+    Load tour data from Excel files when available, otherwise generate mock data.
+    
+    Excel file column mapping:
+    - AD: route (tuyen tour)
+    - AF/AE: business unit - AF for QT files, AE for ND files 
+    - S: booked customers
+    - R: total customers
+    - W: total money
+    
+    Returns (tours_df, plans_df, historical_df).
+    """
+    """
+    
+    Behavior:
+    - Looks for Excel files under the input_excels folder (or path given by input_folder)
+    - Supports files named like Etour(QT).xls and Etour(ND).xls (or any .xls/.xlsx)
+    - Parses columns by Excel column letters:
+        AD = tuyen tour (route)
+        AF (QT files) or AE (ND files) = dau khoi hanh = business unit
+        S = so khach da book
+        R = so khach total
+        W = tong tien tour
+    - Other required fields are filled using generator defaults/randomization
+    - Plans and historical data are still generated by the generator (unchanged)
+    
+    Returns: tours_df, plans_df, historical_df
+    """
+    
+    Behavior:
+    - Look for Excel files under the workspace `input_excels` folder (or path given by input_folder).
+    - Supports files named like `Etour(QT).xls` and `Etour(ND).xls` (or any .xls/.xlsx) and will parse columns by Excel column letters:
+        * AD = tuyến tour (route)
+        * AF (for QT) or AE (for ND) = đầu khởi hành = business unit
+        * S = số khách đã book
+        * R = số khách total
+        * W = tổng tiền tour
+    - Other required fields are filled using generator defaults/randomization so the dashboard logic remains unchanged.
+    - Plans and historical data are still generated by the generator (unchanged).
+    
+    Returns: tours_df, plans_df, historical_df
+    """
+
+    Behavior:
+    - Look for Excel files under the workspace `input_excels` folder (or path given by input_folder).
+    - Supports files named like `Etour(QT).xls` and `Etour(ND).xls` (or any .xls/.xlsx) and will parse columns by Excel column letters:
+        * AD = tuyến tour (route)
+        * AF (for QT) or AE (for ND) = đầu khởi hành = business unit
+        * S = số khách đã book
+        * R = số khách total
+        * W = tổng tiền tour
+    - Other required fields are filled using generator defaults/randomization so the dashboard logic remains unchanged.
+    - Plans and historical data are still generated by the generator (unchanged).
+    
+    Returns: tours_df, plans_df, historical_df
+    """
+    import os
+    import glob
+    import math
+    import random
+    from datetime import datetime as _dt
+
+    generator = VietravelDataGenerator()
+    
+    # Current date
+    current_date = datetime.now()
+    current_year = current_date.year
+
+    # Helper: Excel column index (0-based) from letters (e.g., 'AD' -> 29)
+    def col_index(letter):
+        # Convert base-26 letters to 0-based index
+        s = 0
+        for ch in letter.upper():
+            s = s * 26 + (ord(ch) - ord('A') + 1)
+        return s - 1
+
+    # Precomputed indices for the requested columns
+    idx_AD = col_index('AD')
+    idx_AF = col_index('AF')
+    idx_AE = col_index('AE')
+    idx_S = col_index('S')
+    idx_R = col_index('R')
+    idx_W = col_index('W')
+
+    # Look for excel files in input_folder - try multiple possible locations
+    workspace_root = os.path.dirname(os.path.abspath(__file__))
+    possible_folders = [
+        os.path.join(workspace_root, input_folder),  # relative to this file
+        input_folder,  # direct path
+        os.path.abspath(input_folder)  # absolute path
+    ]
+    
+    excel_folder = None
+    for folder in possible_folders:
+        if os.path.isdir(folder):
+            excel_folder = folder
+            print(f"Found Excel folder at: {folder}")
+            break
+            
+    if excel_folder is None:
+        print(f"No Excel folder found in checked locations: {possible_folders}")
+        excel_folder = os.path.join(workspace_root, input_folder)  # default location
+    tours_records = []
+    record_counter = 0
+
+    if os.path.isdir(excel_folder):
+        # Find .xls/.xlsx files
+        patterns = [os.path.join(excel_folder, '*.xls'), os.path.join(excel_folder, '*.xlsx')]
+        files = []
+        for p in patterns:
+            files.extend(glob.glob(p))
+
+        for file_path in files:
+            # Determine file type by filename to pick AF vs AE when applicable
+            fname = os.path.basename(file_path)
+            is_qt = '(QT)' in fname or 'QT' in fname
+            is_nd = '(ND)' in fname or 'ND' in fname
+
+            try:
+                # Read without header to use column indices reliably
+                df_raw = pd.read_excel(file_path, header=None)
+            except Exception:
+                # Fallback: try with engine openpyxl/xlrd automatic
+                df_raw = pd.read_excel(file_path, header=None, engine=None)
+
+            if df_raw is None or df_raw.empty:
+                continue
+
+            for _, row in df_raw.iterrows():
+                try:
+                    # Extract route
+                    route = None
+                    try:
+                        route = str(row.iloc[idx_AD]).strip()
+                        if route in ['nan', 'None', 'NoneType', '']:
+                            route = None
+                    except Exception:
+                        route = None
+
+                    # Extract business unit from AF (QT) or AE (ND)
+                    bu = None
+                    try:
+                        if is_qt:
+                            bu = str(row.iloc[idx_AF]).strip()
+                        elif is_nd:
+                            bu = str(row.iloc[idx_AE]).strip()
+                        else:
+                            # Try AF then AE
+                            bu = str(row.iloc[idx_AF]).strip() if not pd.isna(row.iloc[idx_AF]) else str(row.iloc[idx_AE]).strip()
+                        if bu in ['nan', 'None', 'NoneType', '']:
+                            bu = None
+                    except Exception:
+                        bu = None
+
+                    # Booked and total pax
+                    try:
+                        s_val = row.iloc[idx_S]
+                        num_booked = int(s_val) if not pd.isna(s_val) else 0
+                    except Exception:
+                        num_booked = 0
+
+                    try:
+                        r_val = row.iloc[idx_R]
+                        num_total = int(r_val) if not pd.isna(r_val) else num_booked
+                    except Exception:
+                        num_total = num_booked
+
+                    # Total money
+                    try:
+                        w_val = row.iloc[idx_W]
+                        total_money = float(w_val) if not pd.isna(w_val) else 0.0
+                    except Exception:
+                        total_money = 0.0
+
+                    # If route or bu missing, skip row to avoid garbage
+                    if (route is None or route == 'None') and (bu is None or bu == 'None'):
+                        continue
+
+                    # Fill other fields using generator heuristics
+                    record_counter += 1
+                    booking_id = f"EX{record_counter:06d}"
+                    customer_id = f"KHEX{record_counter:06d}"
+                    # Random booking date within current year
+                    booking_date = fake.date_time_between(start_date=_dt(current_year, 1, 1), end_date=current_date).replace(tzinfo=None)
+
+                    # Validate and fallback to generator lists
+                    if not route or route.lower() in ['nan', 'none', '']:
+                        route = random.choice(generator.tour_routes)
+                    if not bu or bu.lower() in ['nan', 'none', '']:
+                        # choose a business unit that matches route if possible
+                        matches = [u for r, u in generator.route_unit_pairs if r == route]
+                        if matches:
+                            bu = random.choice(matches)
+                        else:
+                            bu = random.choice(generator.business_units)
+
+                    sales_channel = random.choice(generator.sales_channels)
+                    segment = random.choice(generator.segments)
+
+                    num_customers = num_booked if num_booked > 0 else (num_total if num_total > 0 else random.randint(1, 10))
+                    tour_capacity = random.choice([20, 25, 30, 35, 40, 45])
+
+                    revenue = total_money if total_money > 0 else (num_customers * random.randint(3000000, 15000000))
+                    price_per_person = revenue / num_customers if num_customers > 0 else 0
+
+                    cost_ratio = random.uniform(0.85, 0.95)
+                    cost = revenue * cost_ratio
+                    gross_profit = revenue - cost
+                    gross_profit_margin = (gross_profit / revenue * 100) if revenue > 0 else 0
+
+                    status = 'Đã xác nhận'
+
+                    if sales_channel == 'Online':
+                        marketing_cost = revenue * random.uniform(0.02, 0.05)
+                        sales_cost = revenue * random.uniform(0.01, 0.02)
+                    else:
+                        marketing_cost = revenue * random.uniform(0.01, 0.03)
+                        sales_cost = revenue * random.uniform(0.02, 0.05)
+
+                    opex = marketing_cost + sales_cost
+
+                    partner_name, partner_type = random.choice(generator.partners)
+                    service_type = partner_type if partner_type in generator.service_types else random.choice(generator.service_types)
+                    contract_status = random.choices(["Đang triển khai", "Sắp hết hạn", "Đã thanh lý"], weights=[0.8, 0.1, 0.1])[0]
+                    payment_status = random.choices(["Trả trước", "Trả sau", "Chưa thanh toán"], weights=[0.6, 0.3, 0.1])[0]
+                    feedback_ratio = random.uniform(0.7, 0.95)
+                    service_cost = cost * random.uniform(0.8, 1.2)
+
+                    age_group = random.choices(["18-25 (Gen Z)", "26-35 (Young Pro)", "36-55 (Mid-Career)", "56+ (Retiree)"], weights=[0.25, 0.40, 0.30, 0.05])[0]
+                    if route in ["Châu Âu", "Châu Mỹ", "Châu Úc"]:
+                        nationality = random.choices(["Việt Nam", "Mỹ", "Pháp", "Úc"], weights=[0.4, 0.3, 0.2, 0.1])[0]
+                    else:
+                        nationality = random.choices(["Việt Nam", "Hàn Quốc", "Trung Quốc"], weights=[0.8, 0.1, 0.1])[0]
+
+                    tours_records.append({
+                        'booking_id': booking_id,
+                        'customer_id': customer_id,
+                        'booking_date': booking_date,
+                        'route': route,
+                        'business_unit': bu,
+                        'sales_channel': sales_channel,
+                        'segment': segment,
+                        'num_customers': int(num_customers),
+                        'tour_capacity': tour_capacity,
+                        'price_per_person': price_per_person,
+                        'revenue': float(revenue),
+                        'cost': float(cost),
+                        'gross_profit': float(gross_profit),
+                        'gross_profit_margin': float(gross_profit_margin),
+                        'status': status,
+                        'marketing_cost': float(marketing_cost),
+                        'sales_cost': float(sales_cost),
+                        'opex': float(opex),
+                        'partner': partner_name,
+                        'partner_type': partner_type,
+                        'service_type': service_type,
+                        'contract_status': contract_status,
+                        'payment_status': payment_status,
+                        'feedback_ratio': feedback_ratio,
+                        'customer_age_group': age_group,
+                        'customer_nationality': nationality,
+                        'service_cost': float(service_cost)
+                    })
+                except Exception:
+                    # Skip problematic rows
+                    continue
+
+    # If we parsed at least one record from Excel files, use that as tours_df
+    if tours_records:
+        tours_df = pd.DataFrame(tours_records)
+    else:
+        # Fallback: generate mock tours as before
+        year_start = datetime(current_year, 1, 1)
+        year_end = current_date
+        tours_df = generator.generate_tour_data(year_start, year_end, num_tours=1500)
+
+    # Generate plan data for current year (unchanged)
+    plans_df = generator.generate_plan_data(current_year)
+
+    # Generate historical data (including last year for YoY comparison)
+    historical_df = generator.generate_historical_data(current_date, lookback_years=2)
+
+    return tours_df, plans_df, historical_df
